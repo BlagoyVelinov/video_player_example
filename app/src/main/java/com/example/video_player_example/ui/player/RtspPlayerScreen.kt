@@ -12,6 +12,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.height
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -44,12 +51,15 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.lifecycle.viewmodel.compose.viewModel
 
 @androidx.annotation.OptIn(UnstableApi::class)
 @Composable
 fun RtspPlayerScreen(
-    url: String = "rtsp://dev.gradotech.eu:8554/stream"
+    url: String = "rtsp://dev.gradotech.eu:8554/stream",
+    onBackPressed: (() -> Unit)? = null
 ) {
     val context: Context = LocalContext.current
     val vm: PlayerViewModel = viewModel()
@@ -60,6 +70,10 @@ fun RtspPlayerScreen(
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                 Log.e("RTSP", "Playback error: ${error.errorCodeName}", error)
                 Toast.makeText(context, "Playback error: ${error.errorCodeName}", Toast.LENGTH_LONG).show()
+                try {
+                    myPlayer.prepare()
+                    myPlayer.playWhenReady = true
+                } catch (_: Throwable) {}
             }
             override fun onPlaybackStateChanged(playbackState: Int) {
                 val state = when (playbackState) {
@@ -70,6 +84,18 @@ fun RtspPlayerScreen(
                     else -> playbackState.toString()
                 }
                 Log.d("RTSP", "State: $state")
+                if (playbackState == Player.STATE_IDLE) {
+                    try {
+                        myPlayer.prepare()
+                        myPlayer.playWhenReady = true
+                    } catch (_: Throwable) {}
+                }
+                if (playbackState == Player.STATE_ENDED) {
+                    try {
+                        myPlayer.seekToDefaultPosition()
+                        myPlayer.playWhenReady = true
+                    } catch (_: Throwable) {}
+                }
             }
             override fun onVideoSizeChanged(videoSize: VideoSize) {
                 Log.d("RTSP", "Video size: ${videoSize.width}x${videoSize.height}")
@@ -77,26 +103,43 @@ fun RtspPlayerScreen(
         })
     }
 
-    var controlsVisible by remember { mutableStateOf(true) }
-    var isFullscreen by remember { mutableStateOf(false) }
-    var volume by remember { mutableFloatStateOf(1f) }
-
-    LaunchedEffect(controlsVisible, myPlayer.isPlaying) {
-        if (controlsVisible && myPlayer.isPlaying) {
-            delay(3000)
-            controlsVisible = false
+    LaunchedEffect(myPlayer) {
+        var lastPos = -1L
+        var stagnantMs = 0L
+        while (true) {
+            val pos = myPlayer.currentPosition
+            val state = myPlayer.playbackState
+            if ((state == Player.STATE_BUFFERING || state == Player.STATE_READY) && myPlayer.playWhenReady) {
+                if (pos == lastPos) stagnantMs += 1000 else stagnantMs = 0
+                if (stagnantMs >= 15000L) {
+                    try {
+                        myPlayer.prepare()
+                        myPlayer.playWhenReady = true
+                    } catch (_: Throwable) {}
+                    stagnantMs = 0
+                }
+            } else {
+                stagnantMs = 0
+            }
+            lastPos = pos
+            delay(1000)
         }
     }
+
+    var controlsVisible by remember { mutableStateOf(true) }
+    var isFullscreen by remember { mutableStateOf(false) }
+    var volume by rememberSaveable { mutableFloatStateOf(1f) }
+    var playerView by remember { mutableStateOf<PlayerView?>(null) }
+    val configuration = LocalConfiguration.current
+    val isPortrait = configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT
 
     // Apply volume to player
     LaunchedEffect(volume) { myPlayer.volume = volume }
 
+    // Let PlayerView handle all timing - we just react immediately
+
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .pointerInput(Unit) {
-                detectTapGestures(onTap = { controlsVisible = !controlsVisible })
-            }
+        modifier = Modifier.fillMaxSize()
     ) {
         AndroidView(
             factory = { ctx ->
@@ -106,29 +149,92 @@ fun RtspPlayerScreen(
                     keepScreenOn = true
                     setKeepContentOnPlayerReset(true)
                     resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                    // Prevent surface recreation during rotation
+                    setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
                     player = myPlayer
+                    
+                    // Adjust control padding for portrait mode
+                    if (isPortrait) {
+                        // Add bottom padding to raise controls higher in portrait
+                        setPadding(0, 0, 0, 120) // 120dp bottom padding
+                    }
+                    
+                    // Set up control visibility listener with immediate sync
+                    setControllerVisibilityListener(PlayerView.ControllerVisibilityListener { visibility ->
+                        // Use post to ensure immediate UI update
+                        post {
+                            controlsVisible = visibility == android.view.View.VISIBLE
+                        }
+                    })
+                    
+                    // Ensure consistent timing
+                    controllerShowTimeoutMs = 3000
+                    
+                    playerView = this
+                }
+            },
+            update = { pv ->
+                // Ensure player is always attached during recomposition
+                if (pv.player != myPlayer) {
+                    pv.player = myPlayer
+                }
+                
+                // Update padding based on orientation
+                if (isPortrait) {
+                    pv.setPadding(0, 0, 0, 120)
+                } else {
+                    pv.setPadding(0, 0, 0, 0)
                 }
             },
             modifier = Modifier.fillMaxSize()
         )
 
-        // Minimal overlay: volume slider + fullscreen button
+        // Player controls overlay
         if (controlsVisible) {
+            // Back button (top-left)
+            if (onBackPressed != null) {
+                IconButton(
+                    onClick = {
+                        // Properly stop the video using ViewModel
+                        vm.stopPlayback()
+                        onBackPressed()
+                    },
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .statusBarsPadding()
+                        .padding(16.dp)
+                        .background(Color(0x66000000), androidx.compose.foundation.shape.CircleShape)
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back",
+                        tint = Color.White
+                    )
+                }
+            }
+            
+            // Bottom controls: volume slider + fullscreen button
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .background(Color(0x66000000))
+                    .background(Color(0x00000000))
+                    .navigationBarsPadding()
                     .padding(horizontal = 12.dp, vertical = 8.dp)
+                    .padding(bottom = if (isPortrait) 0.dp else 0.dp)
                 
             ) {
-                Text(text = "Volume", color = Color.White, style = MaterialTheme.typography.labelMedium)
-                Spacer(modifier = Modifier.width(8.dp))
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.VolumeUp,
+                    contentDescription = "Volume",
+                    tint = Color.White,
+                    modifier = Modifier.padding(end = 8.dp)
+                )
                 Slider(
                     value = volume,
                     onValueChange = { volume = it },
                     valueRange = 0f..1f,
-                    modifier = Modifier.width(180.dp)
+                    modifier = Modifier.width(120.dp)
                 )
 
                 Spacer(modifier = Modifier.width(8.dp))
