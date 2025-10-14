@@ -1,64 +1,63 @@
-package com.example.video_player_example.ui.player
+package com.example.video_player_example.ui.player.exo_player
 
-import android.content.Context
-import android.util.Log
-import android.widget.Toast
 import android.app.Activity
-import androidx.compose.foundation.layout.fillMaxSize
+import android.content.Context
+import android.content.res.Configuration
+import android.util.Log
+import android.view.View
+import android.widget.Toast
+import androidx.annotation.OptIn
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.height
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.PlayerView
 import androidx.media3.ui.AspectRatioFrameLayout
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
-import kotlinx.coroutines.delay
+import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Fullscreen
-import androidx.compose.material.icons.filled.FullscreenExit
-import androidx.compose.material.icons.automirrored.filled.VolumeUp
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.lifecycle.viewmodel.compose.viewModel
 
-@androidx.annotation.OptIn(UnstableApi::class)
+@OptIn(UnstableApi::class)
 @Composable
 fun RtspPlayerScreen(
     url: String = "rtsp://dev.gradotech.eu:8554/stream",
@@ -66,7 +65,13 @@ fun RtspPlayerScreen(
 ) {
     val context: Context = LocalContext.current
     val vm: PlayerViewModel = viewModel()
-    LaunchedEffect(url) { vm.ensurePlaying(url) }
+    var isLoading by remember { mutableStateOf(true) }
+    
+    // Preload the stream for faster startup
+    LaunchedEffect(url) { 
+        vm.preloadStream(url)
+        vm.ensurePlaying(url) 
+    }
     val myPlayer: ExoPlayer = vm.player
     // Add listener only once per player instance
     DisposableEffect(myPlayer) {
@@ -75,7 +80,7 @@ fun RtspPlayerScreen(
         val maxRetries = 3
         
         val listener = object : Player.Listener {
-            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+            override fun onPlayerError(error: PlaybackException) {
                 Log.e("RTSP", "Playback error: ${error.errorCodeName} (attempt ${connectionAttempts + 1})", error)
                 
                 if (url.startsWith("rtsp://") && connectionAttempts < maxRetries) {
@@ -120,7 +125,13 @@ fun RtspPlayerScreen(
                     // Reset connection attempts on successful connection
                     if (playbackState == Player.STATE_READY && myPlayer.bufferedPercentage > 0) {
                         connectionAttempts = 0
+                        isLoading = false // Hide loading indicator
                         Log.d("RTSP", "Connection successful, reset retry counter")
+                    }
+                    
+                    // Show loading for buffering states
+                    if (playbackState == Player.STATE_BUFFERING) {
+                        isLoading = true
                     }
                 }
                 
@@ -216,7 +227,7 @@ fun RtspPlayerScreen(
     var volume by rememberSaveable { mutableFloatStateOf(1f) }
     var playerView by remember { mutableStateOf<PlayerView?>(null) }
     val configuration = LocalConfiguration.current
-    val isPortrait = configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT
+    val isPortrait = configuration.orientation == Configuration.ORIENTATION_PORTRAIT
 
     // Apply volume to player
     LaunchedEffect(volume) { myPlayer.volume = volume }
@@ -251,8 +262,8 @@ fun RtspPlayerScreen(
                     keepScreenOn = true
                     setKeepContentOnPlayerReset(true)
                     resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                    // Prevent surface recreation during rotation
-                    setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
+                    // Optimize for faster startup
+                    setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING) // Show buffering only when playing
                     player = myPlayer
                     
                     // Adjust control padding for portrait mode
@@ -265,7 +276,7 @@ fun RtspPlayerScreen(
                     setControllerVisibilityListener(PlayerView.ControllerVisibilityListener { visibility ->
                         // Use post to ensure immediate UI update
                         post {
-                            controlsVisible = visibility == android.view.View.VISIBLE
+                            controlsVisible = visibility == View.VISIBLE
                         }
                     })
                     
@@ -333,7 +344,7 @@ fun RtspPlayerScreen(
                         .align(Alignment.TopStart)
                         .statusBarsPadding()
                         .padding(16.dp)
-                        .background(Color(0x66000000), androidx.compose.foundation.shape.CircleShape)
+                        .background(Color(0x66000000), CircleShape)
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -381,8 +392,6 @@ fun RtspPlayerScreen(
             }
         }
     }
-
-    // Do not release here; the ViewModel owns the player lifecycle
 }
 
 private fun toggleFullscreen(context: Context, enable: Boolean) {

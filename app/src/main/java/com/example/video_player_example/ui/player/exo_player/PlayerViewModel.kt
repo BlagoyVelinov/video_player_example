@@ -1,24 +1,21 @@
-package com.example.video_player_example.ui.player
+package com.example.video_player_example.ui.player.exo_player
 
 import android.app.Application
 import androidx.annotation.OptIn
 import androidx.lifecycle.AndroidViewModel
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
-import androidx.media3.common.MimeTypes
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.DefaultLoadControl
-import androidx.media3.exoplayer.LoadControl
 import androidx.media3.exoplayer.rtsp.RtspMediaSource
-import androidx.media3.datasource.DefaultHttpDataSource
-import androidx.media3.exoplayer.source.MediaSource
-import androidx.media3.datasource.DefaultDataSource
 import android.util.Log
+import androidx.media3.common.Player
 
 class PlayerViewModel(application: Application) : AndroidViewModel(application) {
     private var _player: ExoPlayer? = null
     private var currentUrl: String? = null
+    private var isPreloading = false
 
     val player: ExoPlayer
         @OptIn(UnstableApi::class)
@@ -29,14 +26,14 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 .setLoadControl(
                     DefaultLoadControl.Builder()
                         .setBufferDurationsMs(
-                            /* minBufferMs = */ 5000,    // Increased for live streams
-                            /* maxBufferMs = */ 20000,   // Larger buffer for stability
-                            /* bufferForPlaybackMs = */ 2000,  // Higher threshold to start
-                            /* bufferForPlaybackAfterRebufferMs = */ 5000  // More buffer after rebuffer
+                            /* minBufferMs = */ 2000,    // Reduced for faster startup
+                            /* maxBufferMs = */ 15000,   // Still large enough for stability
+                            /* bufferForPlaybackMs = */ 500,   // Much lower threshold for faster start
+                            /* bufferForPlaybackAfterRebufferMs = */ 1500  // Reduced rebuffer requirement
                         )
                         .setPrioritizeTimeOverSizeThresholds(true)
                         .setTargetBufferBytes(-1) // Use time-based buffering only
-                        .setBackBuffer(10000, true) // Keep back buffer for seeking
+                        .setBackBuffer(5000, true) // Smaller back buffer for faster startup
                         .build()
                 )
                 .build()
@@ -47,8 +44,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     fun ensurePlaying(url: String) {
         // Prevent repeated calls with same URL when already playing
         if (currentUrl == url && player.mediaItemCount > 0 && 
-            (player.playbackState == androidx.media3.common.Player.STATE_READY || 
-             player.playbackState == androidx.media3.common.Player.STATE_BUFFERING)) {
+            (player.playbackState == Player.STATE_READY ||
+             player.playbackState == Player.STATE_BUFFERING)) {
             return
         }
         currentUrl = url
@@ -60,21 +57,21 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         if (url.startsWith("rtsp://")) {
             Log.d("PlayerViewModel", "Setting up RTSP stream: $url")
             
-            // Use dedicated RTSP media source with enhanced configuration for live streams
+            // Use dedicated RTSP media source optimized for fast startup
             val rtspMediaSource = RtspMediaSource.Factory()
-                .setForceUseRtpTcp(false) // Try UDP first, fallback to TCP
-                .setTimeoutMs(20000) // Increased timeout for initial connection
-                .setDebugLoggingEnabled(true) // Enable debug logging
+                .setForceUseRtpTcp(false) // Try UDP first for faster connection
+                .setTimeoutMs(8000) // Reduced timeout for faster failure detection
+                .setDebugLoggingEnabled(false) // Disable debug logging for performance
                 .createMediaSource(
                     MediaItem.Builder()
                         .setUri(url)
                         .setLiveConfiguration(
                             MediaItem.LiveConfiguration.Builder()
-                                .setTargetOffsetMs(3000) // Increased buffer for stability
-                                .setMinPlaybackSpeed(0.9f) // More tolerance for speed variation
-                                .setMaxPlaybackSpeed(1.1f)
-                                .setMinOffsetMs(1000) // Minimum live offset
-                                .setMaxOffsetMs(10000) // Maximum live offset
+                                .setTargetOffsetMs(1000) // Reduced for faster startup
+                                .setMinPlaybackSpeed(0.95f) // Tighter range for better performance
+                                .setMaxPlaybackSpeed(1.05f)
+                                .setMinOffsetMs(500) // Lower minimum for faster start
+                                .setMaxOffsetMs(5000) // Lower maximum for faster start
                                 .build()
                         )
                         .build()
@@ -90,8 +87,23 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             player.setMediaItem(mediaItem)
         }
 
+        // Prepare immediately for faster startup
         player.prepare()
         player.playWhenReady = true
+        
+        Log.d("PlayerViewModel", "Player prepared and ready for: $url")
+    }
+    
+    @OptIn(UnstableApi::class)
+    fun preloadStream(url: String) {
+        if (isPreloading || currentUrl == url) return
+        
+        Log.d("PlayerViewModel", "Preloading stream: $url")
+        isPreloading = true
+        
+        // Initialize player early to reduce startup time
+        player // This triggers player creation
+        isPreloading = false
     }
     fun stopPlayback() {
         _player?.let { player ->
