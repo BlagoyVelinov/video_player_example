@@ -35,27 +35,6 @@ object VideoRepository {
             description = "Open source animated short film",
             duration = "10:34"
         ),
-        VideoItem(
-            id = "4",
-            title = "Elephant Dream", 
-            url = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
-            description = "Open source animated film",
-            duration = "10:53"
-        ),
-        VideoItem(
-            id = "5",
-            title = "For Bigger Blazes",
-            url = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4", 
-            description = "Sample video content",
-            duration = "00:15"
-        ),
-        VideoItem(
-            id = "6",
-            title = "Sintel",
-            url = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
-            description = "Open source fantasy short film",
-            duration = "14:48"
-        )
     )
     
     fun getSampleVideos(): List<VideoItem> = videos

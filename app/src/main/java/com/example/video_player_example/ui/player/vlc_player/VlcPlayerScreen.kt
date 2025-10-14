@@ -2,6 +2,7 @@ package com.example.video_player_example.ui.player.vlc_player
 
 import android.app.Activity
 import android.content.Context
+import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.util.Log
 import androidx.compose.foundation.background
@@ -77,10 +78,17 @@ fun VlcPlayerScreen(
         }
     }
     
-    // Fullscreen handling
+    // Fullscreen handling - only manage system UI, not rotation in LaunchedEffect
     LaunchedEffect(isFullscreen, configuration.orientation) {
         delay(100)
-        toggleFullscreen(context, isFullscreen)
+        // Only handle system UI visibility, rotation is handled by button click
+        val activity = context as? Activity ?: return@LaunchedEffect
+        val window = activity.window
+        WindowCompat.setDecorFitsSystemWindows(window, !isFullscreen)
+        val controller = WindowInsetsControllerCompat(window, window.decorView)
+        controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        if (isFullscreen) controller.hide(WindowInsetsCompat.Type.systemBars())
+        else controller.show(WindowInsetsCompat.Type.systemBars())
     }
     
     Box(
@@ -189,7 +197,7 @@ fun VlcPlayerScreen(
                 Spacer(modifier = Modifier.width(8.dp))
                 IconButton(onClick = {
                     isFullscreen = !isFullscreen
-                    toggleFullscreen(context, isFullscreen)
+                    toggleFullscreenWithRotation(context, isFullscreen, isPortrait)
                 }) {
                     Icon(
                         imageVector = if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
@@ -209,8 +217,21 @@ fun VlcPlayerScreen(
     }
 }
 
-private fun toggleFullscreen(context: Context, enable: Boolean) {
+private fun toggleFullscreenWithRotation(context: Context, enable: Boolean, isCurrentlyPortrait: Boolean) {
     val activity = context as? Activity ?: return
+    
+    // Handle screen rotation
+    if (enable) {
+        // Entering fullscreen - rotate to landscape if currently in portrait
+        if (isCurrentlyPortrait) {
+            activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        }
+    } else {
+        // Exiting fullscreen - return to portrait
+        activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+    }
+    
+    // Handle system UI visibility
     val window = activity.window
     WindowCompat.setDecorFitsSystemWindows(window, !enable)
     val controller = WindowInsetsControllerCompat(window, window.decorView)

@@ -59,7 +59,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             
             // Use dedicated RTSP media source optimized for fast startup
             val rtspMediaSource = RtspMediaSource.Factory()
-                .setForceUseRtpTcp(false) // Try UDP first for faster connection
+                .setForceUseRtpTcp(true) // Try UDP first for faster connection
                 .setTimeoutMs(8000) // Reduced timeout for faster failure detection
                 .setDebugLoggingEnabled(false) // Disable debug logging for performance
                 .createMediaSource(

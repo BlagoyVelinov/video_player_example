@@ -2,6 +2,7 @@ package com.example.video_player_example.ui.player.exo_player
 
 import android.app.Activity
 import android.content.Context
+import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.util.Log
 import android.view.View
@@ -232,12 +233,18 @@ fun RtspPlayerScreen(
     // Apply volume to player
     LaunchedEffect(volume) { myPlayer.volume = volume }
 
-    // Ensure fullscreen state is applied after orientation changes
+    // Ensure fullscreen state is applied after orientation changes - only manage system UI
     LaunchedEffect(isFullscreen, configuration.orientation) {
         // Small delay to ensure orientation change is complete
         delay(100)
-        // Always apply the current fullscreen state after orientation change
-        toggleFullscreen(context, isFullscreen)
+        // Only handle system UI visibility, rotation is handled by button click
+        val activity = context as? Activity ?: return@LaunchedEffect
+        val window = activity.window
+        WindowCompat.setDecorFitsSystemWindows(window, !isFullscreen)
+        val controller = WindowInsetsControllerCompat(window, window.decorView)
+        controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        if (isFullscreen) controller.hide(WindowInsetsCompat.Type.systemBars())
+        else controller.show(WindowInsetsCompat.Type.systemBars())
     }
     
     // Auto-enter fullscreen when rotating to landscape if not already in fullscreen
@@ -269,7 +276,7 @@ fun RtspPlayerScreen(
                     // Adjust control padding for portrait mode
                     if (isPortrait) {
                         // Add bottom padding to raise controls higher in portrait
-                        setPadding(0, 0, 0, 120) // 120dp bottom padding
+                        setPadding(0, 0, 0, 30) // 120dp bottom padding
                     }
                     
                     // Set up control visibility listener with immediate sync
@@ -309,7 +316,7 @@ fun RtspPlayerScreen(
                 
                 // Update padding based on orientation
                 if (isPortrait) {
-                    pv.setPadding(0, 0, 0, 120)
+                    pv.setPadding(0, 0, 0, 80)
                 } else {
                     pv.setPadding(0, 0, 0, 0)
                 }
@@ -381,7 +388,7 @@ fun RtspPlayerScreen(
                 Spacer(modifier = Modifier.width(8.dp))
                 IconButton(onClick = {
                     isFullscreen = !isFullscreen
-                    toggleFullscreen(context, isFullscreen)
+                    toggleFullscreenWithRotation(context, isFullscreen, isPortrait)
                 }) {
                     Icon(
                         imageVector = if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
@@ -394,8 +401,21 @@ fun RtspPlayerScreen(
     }
 }
 
-private fun toggleFullscreen(context: Context, enable: Boolean) {
+private fun toggleFullscreenWithRotation(context: Context, enable: Boolean, isCurrentlyPortrait: Boolean) {
     val activity = context as? Activity ?: return
+    
+    // Handle screen rotation
+    if (enable) {
+        // Entering fullscreen - rotate to landscape if currently in portrait
+        if (isCurrentlyPortrait) {
+            activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        }
+    } else {
+        // Exiting fullscreen - return to portrait
+        activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+    }
+    
+    // Handle system UI visibility
     val window = activity.window
     WindowCompat.setDecorFitsSystemWindows(window, !enable)
     val controller = WindowInsetsControllerCompat(window, window.decorView)
