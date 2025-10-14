@@ -45,6 +45,9 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
@@ -65,15 +68,41 @@ fun RtspPlayerScreen(
     val vm: PlayerViewModel = viewModel()
     LaunchedEffect(url) { vm.ensurePlaying(url) }
     val myPlayer: ExoPlayer = vm.player
-    LaunchedEffect(myPlayer) {
-        myPlayer.addListener(object : Player.Listener {
+    // Add listener only once per player instance
+    DisposableEffect(myPlayer) {
+        var lastLoggedState = -1
+        var connectionAttempts = 0
+        val maxRetries = 3
+        
+        val listener = object : Player.Listener {
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                Log.e("RTSP", "Playback error: ${error.errorCodeName}", error)
-                Toast.makeText(context, "Playback error: ${error.errorCodeName}", Toast.LENGTH_LONG).show()
-                try {
-                    myPlayer.prepare()
-                    myPlayer.playWhenReady = true
-                } catch (_: Throwable) {}
+                Log.e("RTSP", "Playback error: ${error.errorCodeName} (attempt ${connectionAttempts + 1})", error)
+                
+                if (url.startsWith("rtsp://") && connectionAttempts < maxRetries) {
+                    connectionAttempts++
+                    Log.w("RTSP", "Retrying RTSP connection (attempt $connectionAttempts/$maxRetries)")
+                    
+                    // Wait a bit before retrying
+                    CoroutineScope(Dispatchers.Main).launch {
+                        delay(2000)
+                        try {
+                            vm.reconnectRtsp(url)
+                        } catch (e: Exception) {
+                            Log.e("RTSP", "Retry failed", e)
+                        }
+                    }
+                } else {
+                    // Show error after max retries or for non-RTSP streams
+                    Toast.makeText(context, "Connection failed: ${error.errorCodeName}", Toast.LENGTH_LONG).show()
+                    
+                    // For regular video files, try immediate retry
+                    if (!url.startsWith("rtsp://")) {
+                        try {
+                            myPlayer.prepare()
+                            myPlayer.playWhenReady = true
+                        } catch (_: Throwable) {}
+                    }
+                }
             }
             override fun onPlaybackStateChanged(playbackState: Int) {
                 val state = when (playbackState) {
@@ -83,51 +112,107 @@ fun RtspPlayerScreen(
                     Player.STATE_ENDED -> "ENDED"
                     else -> playbackState.toString()
                 }
-                Log.d("RTSP", "State: $state")
-                if (playbackState == Player.STATE_IDLE) {
-                    try {
-                        myPlayer.prepare()
-                        myPlayer.playWhenReady = true
-                    } catch (_: Throwable) {}
+                // Only log actual state changes to reduce spam
+                if (playbackState != lastLoggedState) {
+                    Log.d("RTSP", "State changed: $state (buffered: ${myPlayer.bufferedPercentage}%)")
+                    lastLoggedState = playbackState
+                    
+                    // Reset connection attempts on successful connection
+                    if (playbackState == Player.STATE_READY && myPlayer.bufferedPercentage > 0) {
+                        connectionAttempts = 0
+                        Log.d("RTSP", "Connection successful, reset retry counter")
+                    }
                 }
-                if (playbackState == Player.STATE_ENDED) {
-                    try {
-                        myPlayer.seekToDefaultPosition()
-                        myPlayer.playWhenReady = true
-                    } catch (_: Throwable) {}
+                
+                // Handle state changes appropriately for different stream types
+                if (url.startsWith("rtsp://")) {
+                    // For RTSP live streams, ENDED state means connection lost - restart
+                    if (playbackState == Player.STATE_ENDED) {
+                        Log.w("RTSP", "Live stream ended unexpectedly, attempting reconnection")
+                        CoroutineScope(Dispatchers.Main).launch {
+                            delay(1000) // Brief delay before reconnecting
+                            try {
+                                vm.reconnectRtsp(url)
+                            } catch (e: Exception) {
+                                Log.e("RTSP", "Failed to restart stream", e)
+                            }
+                        }
+                    }
+                } else {
+                    // For regular video files, handle IDLE and ENDED normally
+                    if (playbackState == Player.STATE_IDLE) {
+                        try {
+                            myPlayer.prepare()
+                            myPlayer.playWhenReady = true
+                        } catch (_: Throwable) {}
+                    }
+                    if (playbackState == Player.STATE_ENDED) {
+                        try {
+                            myPlayer.seekToDefaultPosition()
+                            myPlayer.playWhenReady = true
+                        } catch (_: Throwable) {}
+                    }
                 }
             }
             override fun onVideoSizeChanged(videoSize: VideoSize) {
                 Log.d("RTSP", "Video size: ${videoSize.width}x${videoSize.height}")
             }
-        })
+        }
+        
+        myPlayer.addListener(listener)
+        
+        onDispose {
+            myPlayer.removeListener(listener)
+        }
     }
 
-    LaunchedEffect(myPlayer) {
+    // Connection monitoring for RTSP streams only - more conservative approach
+    LaunchedEffect(myPlayer, url) {
+        if (!url.startsWith("rtsp://")) return@LaunchedEffect
+        
         var lastPos = -1L
         var stagnantMs = 0L
+        var consecutiveStagnantChecks = 0
+        var lastBufferedPercentage = 0
+        
         while (true) {
             val pos = myPlayer.currentPosition
             val state = myPlayer.playbackState
-            if ((state == Player.STATE_BUFFERING || state == Player.STATE_READY) && myPlayer.playWhenReady) {
-                if (pos == lastPos) stagnantMs += 1000 else stagnantMs = 0
-                if (stagnantMs >= 15000L) {
+            val bufferedPercentage = myPlayer.bufferedPercentage
+            
+            // Only monitor for true stagnation during READY state with actual buffering
+            if (state == Player.STATE_READY && myPlayer.playWhenReady && bufferedPercentage > 0) {
+                if (pos == lastPos && bufferedPercentage == lastBufferedPercentage) {
+                    stagnantMs += 3000
+                    consecutiveStagnantChecks++
+                } else {
+                    stagnantMs = 0
+                    consecutiveStagnantChecks = 0
+                }
+                
+                // Only restart if truly stagnant for 60+ seconds AND multiple consecutive checks
+                // This is much more conservative to avoid unnecessary restarts
+                if (stagnantMs >= 60000L && consecutiveStagnantChecks >= 10) {
+                    Log.w("RTSP", "Stream appears truly stagnant (${stagnantMs}ms), attempting reconnection")
                     try {
-                        myPlayer.prepare()
-                        myPlayer.playWhenReady = true
+                        vm.reconnectRtsp(url)
                     } catch (_: Throwable) {}
                     stagnantMs = 0
+                    consecutiveStagnantChecks = 0
                 }
             } else {
+                // Reset counters during buffering or other states
                 stagnantMs = 0
+                consecutiveStagnantChecks = 0
             }
             lastPos = pos
-            delay(1000)
+            lastBufferedPercentage = bufferedPercentage
+            delay(3000) // Check even less frequently
         }
     }
 
     var controlsVisible by remember { mutableStateOf(true) }
-    var isFullscreen by remember { mutableStateOf(false) }
+    var isFullscreen by rememberSaveable { mutableStateOf(false) }
     var volume by rememberSaveable { mutableFloatStateOf(1f) }
     var playerView by remember { mutableStateOf<PlayerView?>(null) }
     val configuration = LocalConfiguration.current
@@ -135,6 +220,23 @@ fun RtspPlayerScreen(
 
     // Apply volume to player
     LaunchedEffect(volume) { myPlayer.volume = volume }
+
+    // Ensure fullscreen state is applied after orientation changes
+    LaunchedEffect(isFullscreen, configuration.orientation) {
+        // Small delay to ensure orientation change is complete
+        delay(100)
+        // Always apply the current fullscreen state after orientation change
+        toggleFullscreen(context, isFullscreen)
+    }
+    
+    // Auto-enter fullscreen when rotating to landscape if not already in fullscreen
+    LaunchedEffect(configuration.orientation) {
+        if (!isPortrait && !isFullscreen) {
+            // Optionally auto-enter fullscreen in landscape
+            // Uncomment the next line if you want automatic fullscreen in landscape
+            // isFullscreen = true
+        }
+    }
 
     // Let PlayerView handle all timing - we just react immediately
 
@@ -170,6 +272,21 @@ fun RtspPlayerScreen(
                     // Ensure consistent timing
                     controllerShowTimeoutMs = 3000
                     
+                    // Hide inappropriate controls for RTSP streams
+                    if (url.startsWith("rtsp://")) {
+                        // Hide fast forward, rewind, next, previous buttons for live streams
+                        setShowFastForwardButton(false)
+                        setShowRewindButton(false)
+                        setShowNextButton(false)
+                        setShowPreviousButton(false)
+                    } else {
+                        // Show all controls for regular video files
+                        setShowFastForwardButton(true)
+                        setShowRewindButton(true)
+                        setShowNextButton(false) // Usually false unless you have a playlist
+                        setShowPreviousButton(false) // Usually false unless you have a playlist
+                    }
+                    
                     playerView = this
                 }
             },
@@ -184,6 +301,19 @@ fun RtspPlayerScreen(
                     pv.setPadding(0, 0, 0, 120)
                 } else {
                     pv.setPadding(0, 0, 0, 0)
+                }
+                
+                // Update control visibility based on stream type
+                if (url.startsWith("rtsp://")) {
+                    pv.setShowFastForwardButton(false)
+                    pv.setShowRewindButton(false)
+                    pv.setShowNextButton(false)
+                    pv.setShowPreviousButton(false)
+                } else {
+                    pv.setShowFastForwardButton(true)
+                    pv.setShowRewindButton(true)
+                    pv.setShowNextButton(false)
+                    pv.setShowPreviousButton(false)
                 }
             },
             modifier = Modifier.fillMaxSize()
