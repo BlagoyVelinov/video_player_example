@@ -14,7 +14,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -33,7 +32,6 @@ fun MainScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // Top App Bar
         TopAppBar(
             title = {
                 Row(
@@ -56,8 +54,7 @@ fun MainScreen(
                 containerColor = MaterialTheme.colorScheme.surface
             )
         )
-        
-        // Video List
+
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(16.dp),
@@ -91,7 +88,6 @@ fun VideoItemCard(
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Thumbnail placeholder
             Box(
                 modifier = Modifier
                     .size(80.dp)
@@ -108,8 +104,7 @@ fun VideoItemCard(
             }
             
             Spacer(modifier = Modifier.width(16.dp))
-            
-            // Video Info
+
             Column(
                 modifier = Modifier.weight(1f)
             ) {
@@ -147,8 +142,7 @@ fun VideoItemCard(
                     }
                 }
             }
-            
-            // Play Button
+
             IconButton(
                 onClick = onVideoClick,
                 modifier = Modifier

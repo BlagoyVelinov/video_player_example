@@ -18,8 +18,7 @@ class VlcPlayerViewModel(application: Application) : AndroidViewModel(applicatio
     init {
         Log.d("VlcPlayerViewModel", "ViewModel created: ${this.hashCode()}")
     }
-    
-    // Playback state
+
     val isPlaying = mutableStateOf(false)
     val isPaused = mutableStateOf(false)
     
@@ -43,44 +42,43 @@ class VlcPlayerViewModel(application: Application) : AndroidViewModel(applicatio
     private fun buildVlcOptions(): ArrayList<String> {
         return arrayListOf(
             // Network optimizations for stability
-            "--network-caching=3000",       // Increased caching for better stability
-            "--live-caching=3000",         // Increased live stream caching
-            "--file-caching=3000",         // File caching for local content
+            "--network-caching=3000",
+            "--live-caching=3000",
+            "--file-caching=3000",
             
             // Clock and synchronization for stability
-            "--clock-jitter=0",            // Disable clock jitter
-            "--clock-synchro=1",           // Enable clock synchronization for stability
+            "--clock-jitter=0",
+            "--clock-synchro=1",
             
             // Video stability optimizations
-            "--no-skip-frames",            // Don't skip frames to avoid freezing
-            "--no-drop-late-frames",       // Don't drop late frames
-            "--avcodec-skiploopfilter=0",  // Don't skip loop filter
+            "--no-skip-frames",
+            "--no-drop-late-frames",
+            "--avcodec-skiploopfilter=0",
             
             // RTSP specific optimizations
-            "--rtsp-tcp",                  // Force TCP for RTSP (more reliable)
-            "--rtsp-timeout=10",           // RTSP timeout
+            "--rtsp-tcp",
+            "--rtsp-timeout=10",
             
             // Audio/Video sync
-            "--audio-desync=0",            // No audio desync
-            "--no-audio-time-stretch",     // Disable audio time stretching
+            "--audio-desync=0",
+            "--no-audio-time-stretch",
             
             // Hardware acceleration (more conservative)
-            "--codec=all",                 // Use all available codecs
-            "--no-mediacodec-dr",          // Disable direct rendering for stability
+            "--codec=all",
+            "--no-mediacodec-dr",
             
             // Buffer management
-            "--avcodec-threads=0",         // Auto-detect thread count
-            "--sout-mux-caching=3000",     // Output mux caching
+            "--avcodec-threads=0",
+            "--sout-mux-caching=3000",
             
             // Reduce startup time
-            "--no-video-title-show",       // Don't show video title
-            "--no-snapshot-preview",       // Disable snapshot preview
-            "--no-sub-autodetect-file"     // Don't auto-detect subtitle files
+            "--no-video-title-show",
+            "--no-snapshot-preview",
+            "--no-sub-autodetect-file"
         )
     }
     
     private fun setupMediaPlayerOptions(player: MediaPlayer) {
-        // Set up event listeners for better debugging
         player.setEventListener { event ->
             when (event.type) {
                 MediaPlayer.Event.Opening -> {
@@ -131,35 +129,28 @@ class VlcPlayerViewModel(application: Application) : AndroidViewModel(applicatio
         currentUrl = url
         
         try {
-            // Stop current playback
             if (mediaPlayer.isPlaying) {
                 mediaPlayer.stop()
             }
-            
-            // Create media with optimized options
+
             val media = if (url.startsWith("rtsp://") || url.startsWith("http://") || url.startsWith("https://")) {
-                // For network streams, use Uri to ensure proper parsing
+
                 val uri = Uri.parse(url)
                 Log.d("VlcPlayerViewModel", "Creating media from URI: $uri")
                 Media(libVLC, uri)
             } else {
-                // For local files, use string path
                 Log.d("VlcPlayerViewModel", "Creating media from file path: $url")
                 Media(libVLC, url)
             }.apply {
-                // Add media-specific options for stability
                 addOption(":network-caching=3000")
                 addOption(":live-caching=3000")
                 addOption(":file-caching=3000")
-                
-                // Additional stability options
                 addOption(":rtsp-tcp")
                 addOption(":no-skip-frames")
                 addOption(":clock-synchro=1")
                 addOption(":avcodec-skiploopfilter=0")
             }
-            
-            // Set media and play
+
             mediaPlayer.media = media
             mediaPlayer.play()
             

@@ -41,16 +41,16 @@ fun VlcPlayerScreen(
     val vm: VlcPlayerViewModel = viewModel()
     var isLoading by remember { mutableStateOf(true) }
     var controlsVisible by remember { mutableStateOf(true) }
+    var volumeSliderVisible by remember { mutableStateOf(false) }
+    var isUserTouchingSlider by remember { mutableStateOf(false) }
     var isFullscreen by rememberSaveable { mutableStateOf(false) }
     var volume by rememberSaveable { mutableFloatStateOf(1f) }
-    
-    // Track if we've initialized this URL to prevent restart on rotation
+
     var hasInitialized by rememberSaveable(url) { mutableStateOf(false) }
-    
+
     val configuration = LocalConfiguration.current
     val isPortrait = configuration.orientation == Configuration.ORIENTATION_PORTRAIT
-    
-    // Initialize playback only when needed, not on rotation
+
     LaunchedEffect(url) {
         if (!hasInitialized) {
             Log.d("VlcPlayerScreen", "First initialization for URL: $url")
@@ -60,48 +60,54 @@ fun VlcPlayerScreen(
             isLoading = false
         } else {
             Log.d("VlcPlayerScreen", "Already initialized, skipping playback start for: $url")
-            // Just hide loading if already initialized
             isLoading = false
         }
     }
-    
-    // Apply volume changes
+
     LaunchedEffect(volume) {
         vm.setVolume(volume)
     }
-    
-    // Auto-hide controls
-    LaunchedEffect(controlsVisible) {
-        if (controlsVisible) {
+
+    LaunchedEffect(controlsVisible, vm.isPlaying.value, isPortrait) {
+        if (controlsVisible && vm.isPlaying.value && !isPortrait && !isUserTouchingSlider) {
             delay(3000)
             controlsVisible = false
         }
     }
-    
-    // Fullscreen handling - only manage system UI, not rotation in LaunchedEffect
+
+    LaunchedEffect(vm.isPlaying.value, isPortrait) {
+        if (!vm.isPlaying.value || isPortrait) {
+            controlsVisible = true
+        }
+    }
+
+    LaunchedEffect(volumeSliderVisible, isUserTouchingSlider) {
+        if (volumeSliderVisible && !isUserTouchingSlider) {
+            delay(2000)
+            volumeSliderVisible = false
+        }
+    }
+
     LaunchedEffect(isFullscreen, configuration.orientation) {
         delay(100)
-        // Only handle system UI visibility, rotation is handled by button click
+
         val activity = context as? Activity ?: return@LaunchedEffect
         val window = activity.window
         WindowCompat.setDecorFitsSystemWindows(window, !isFullscreen)
         val controller = WindowInsetsControllerCompat(window, window.decorView)
-        controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        controller.systemBarsBehavior =
+            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         if (isFullscreen) controller.hide(WindowInsetsCompat.Type.systemBars())
         else controller.show(WindowInsetsCompat.Type.systemBars())
     }
-    
+
     Box(
         modifier = Modifier.fillMaxSize()
     ) {
-        // VLC Video Layout
         AndroidView(
             factory = { ctx ->
                 VLCVideoLayout(ctx).apply {
-                    // Attach the media player to the video layout
                     vm.mediaPlayer.attachViews(this, null, false, false)
-                    
-                    // Set click listener to toggle controls
                     setOnClickListener {
                         controlsVisible = !controlsVisible
                     }
@@ -109,8 +115,7 @@ fun VlcPlayerScreen(
             },
             modifier = Modifier.fillMaxSize()
         )
-        
-        // Loading indicator
+
         if (isLoading) {
             Box(
                 modifier = Modifier.fillMaxSize(),
@@ -125,19 +130,19 @@ fun VlcPlayerScreen(
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
                         text = "Connecting to stream...",
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onSurface,
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
             }
         }
-        
-        // Player controls overlay
+
         if (controlsVisible && !isLoading) {
-            // Back button (top-left)
             if (onBackPressed != null) {
                 IconButton(
                     onClick = {
+                        val activity = context as? Activity
+                        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
                         vm.stopPlayback()
                         onBackPressed()
                     },
@@ -145,71 +150,100 @@ fun VlcPlayerScreen(
                         .align(Alignment.TopStart)
                         .statusBarsPadding()
                         .padding(16.dp)
-                        .background(Color(0x66000000), CircleShape)
+                        .background(
+                            MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
+                            CircleShape
+                        )
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Back",
-                        tint = Color.White
+                        tint = MaterialTheme.colorScheme.onSurface
                     )
                 }
             }
-            
-            // Center play/pause button
+
             IconButton(
                 onClick = { vm.togglePlayPause() },
                 modifier = Modifier
                     .align(Alignment.Center)
-                    .background(Color(0x66000000), CircleShape)
+                    .background(
+                        MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
+                        CircleShape
+                    )
                     .size(64.dp)
             ) {
                 Icon(
                     imageVector = if (vm.isPlaying.value) Icons.Default.Pause else Icons.Default.PlayArrow,
                     contentDescription = if (vm.isPlaying.value) "Pause" else "Play",
-                    tint = Color.White,
+                    tint = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.size(32.dp)
                 )
             }
-            
-            // Bottom controls: volume slider + fullscreen button
+
             Row(
                 verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = if (isPortrait) Arrangement.SpaceAround
+                else Arrangement.SpaceBetween,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .background(Color(0x00000000))
-                    .navigationBarsPadding()
                     .padding(horizontal = 12.dp, vertical = 8.dp)
-                    .padding(bottom = if (isPortrait) 120.dp else 0.dp)
+                    .padding(bottom = if (isPortrait) 23.dp else 0.dp)
+                    .padding(start = if (isPortrait) 50.dp else 60.dp)
+                    .widthIn(max = if (isPortrait) 250.dp else 700.dp)
+                    .fillMaxWidth(0.9f)
             ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.VolumeUp,
-                    contentDescription = "Volume",
-                    tint = Color.White,
-                    modifier = Modifier.padding(end = 8.dp)
-                )
-                Slider(
-                    value = volume,
-                    onValueChange = { volume = it },
-                    valueRange = 0f..1f,
-                    modifier = Modifier.width(120.dp)
-                )
-                
+                IconButton(
+                    onClick = { volumeSliderVisible = !volumeSliderVisible },
+                    modifier = Modifier.background(
+                        MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
+                        CircleShape
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.VolumeUp,
+                        contentDescription = "Volume",
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                if (volumeSliderVisible) {
+                    Slider(
+                        value = volume,
+                        onValueChange = {
+                            volume = it
+                            isUserTouchingSlider = true
+                        },
+                        onValueChangeFinished = {
+                            isUserTouchingSlider = false
+                        },
+                        valueRange = 0f..1f,
+                        modifier = Modifier.width(120.dp)
+                    )
+                }
+
                 Spacer(modifier = Modifier.width(8.dp))
-                IconButton(onClick = {
-                    isFullscreen = !isFullscreen
-                    toggleFullscreenWithRotation(context, isFullscreen, isPortrait)
-                }) {
+                IconButton(
+                    onClick = {
+                        isFullscreen = !isFullscreen
+                        toggleFullscreenWithRotation(context, isFullscreen, isPortrait)
+                    },
+                    modifier = Modifier.background(
+                        MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
+                        CircleShape
+                    )
+                ) {
                     Icon(
                         imageVector = if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
                         contentDescription = if (isFullscreen) "Exit Fullscreen" else "Enter Fullscreen",
-                        tint = Color.White
+                        tint = MaterialTheme.colorScheme.onSurface
                     )
                 }
             }
         }
     }
-    
-    // Cleanup on dispose
+
     DisposableEffect(Unit) {
         onDispose {
             vm.stopPlayback()
@@ -217,25 +251,26 @@ fun VlcPlayerScreen(
     }
 }
 
-private fun toggleFullscreenWithRotation(context: Context, enable: Boolean, isCurrentlyPortrait: Boolean) {
+private fun toggleFullscreenWithRotation(
+    context: Context,
+    enable: Boolean,
+    isCurrentlyPortrait: Boolean
+) {
     val activity = context as? Activity ?: return
-    
-    // Handle screen rotation
+
     if (enable) {
-        // Entering fullscreen - rotate to landscape if currently in portrait
         if (isCurrentlyPortrait) {
             activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
         }
     } else {
-        // Exiting fullscreen - return to portrait
-        activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
     }
-    
-    // Handle system UI visibility
+
     val window = activity.window
     WindowCompat.setDecorFitsSystemWindows(window, !enable)
     val controller = WindowInsetsControllerCompat(window, window.decorView)
-    controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+    controller.systemBarsBehavior =
+        WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
     if (enable) controller.hide(WindowInsetsCompat.Type.systemBars())
     else controller.show(WindowInsetsCompat.Type.systemBars())
 }

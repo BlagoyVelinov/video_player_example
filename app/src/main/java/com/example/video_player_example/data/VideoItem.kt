@@ -7,7 +7,7 @@ data class VideoItem(
     val thumbnailUrl: String? = null,
     val description: String? = null,
     val duration: String? = null,
-    val useVlc: Boolean = false // Flag to determine which player to use
+    val useVlc: Boolean = false
 )
 
 object VideoRepository {
@@ -38,7 +38,7 @@ object VideoRepository {
         VideoItem(
             id = "4",
             title = "RTSP Stream (Proxy Server)",
-            url = "http://10.0.2.2:8082/streams/e892bc22-37f8-48f1-874e-c1014026a5b3/index.m3u8",
+            url = "http://10.0.2.2:8083/streams/4d14f4f3-7dc6-40c3-9486-7df3e49e3db9/index.m3u8",
             description = "Open source animated short film",
             duration = "Live",
             useVlc = false

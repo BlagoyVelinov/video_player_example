@@ -26,14 +26,14 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 .setLoadControl(
                     DefaultLoadControl.Builder()
                         .setBufferDurationsMs(
-                            /* minBufferMs = */ 2000,    // Reduced for faster startup
-                            /* maxBufferMs = */ 15000,   // Still large enough for stability
-                            /* bufferForPlaybackMs = */ 500,   // Much lower threshold for faster start
-                            /* bufferForPlaybackAfterRebufferMs = */ 1500  // Reduced rebuffer requirement
+                            /* minBufferMs = */ 2000,
+                            /* maxBufferMs = */ 15000,
+                            /* bufferForPlaybackMs = */ 500,
+                            /* bufferForPlaybackAfterRebufferMs = */ 1500
                         )
                         .setPrioritizeTimeOverSizeThresholds(true)
-                        .setTargetBufferBytes(-1) // Use time-based buffering only
-                        .setBackBuffer(5000, true) // Smaller back buffer for faster startup
+                        .setTargetBufferBytes(-1)
+                        .setBackBuffer(5000, true)
                         .build()
                 )
                 .build()
@@ -42,7 +42,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     @OptIn(UnstableApi::class)
     fun ensurePlaying(url: String) {
-        // Prevent repeated calls with same URL when already playing
         if (currentUrl == url && player.mediaItemCount > 0 && 
             (player.playbackState == Player.STATE_READY ||
              player.playbackState == Player.STATE_BUFFERING)) {
@@ -50,28 +49,26 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
         currentUrl = url
 
-        // Stop current playback before setting new media
         player.stop()
         player.clearMediaItems()
 
         if (url.startsWith("rtsp://")) {
             Log.d("PlayerViewModel", "Setting up RTSP stream: $url")
-            
-            // Use dedicated RTSP media source optimized for fast startup
+
             val rtspMediaSource = RtspMediaSource.Factory()
-                .setForceUseRtpTcp(true) // Try UDP first for faster connection
-                .setTimeoutMs(8000) // Reduced timeout for faster failure detection
-                .setDebugLoggingEnabled(false) // Disable debug logging for performance
+                .setForceUseRtpTcp(true)
+                .setTimeoutMs(8000)
+                .setDebugLoggingEnabled(false)
                 .createMediaSource(
                     MediaItem.Builder()
                         .setUri(url)
                         .setLiveConfiguration(
                             MediaItem.LiveConfiguration.Builder()
-                                .setTargetOffsetMs(1000) // Reduced for faster startup
-                                .setMinPlaybackSpeed(0.95f) // Tighter range for better performance
+                                .setTargetOffsetMs(1000)
+                                .setMinPlaybackSpeed(0.95f)
                                 .setMaxPlaybackSpeed(1.05f)
-                                .setMinOffsetMs(500) // Lower minimum for faster start
-                                .setMaxOffsetMs(5000) // Lower maximum for faster start
+                                .setMinOffsetMs(500)
+                                .setMaxOffsetMs(5000)
                                 .build()
                         )
                         .build()
@@ -80,14 +77,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             player.setMediaSource(rtspMediaSource)
             Log.d("PlayerViewModel", "RTSP media source configured")
         } else {
-            // Regular video files
+
             val mediaItem = MediaItem.Builder()
                 .setUri(url)
                 .build()
             player.setMediaItem(mediaItem)
         }
 
-        // Prepare immediately for faster startup
         player.prepare()
         player.playWhenReady = true
         
@@ -100,9 +96,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         
         Log.d("PlayerViewModel", "Preloading stream: $url")
         isPreloading = true
-        
-        // Initialize player early to reduce startup time
-        player // This triggers player creation
+
+        player
         isPreloading = false
     }
     fun stopPlayback() {
@@ -117,7 +112,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     @OptIn(UnstableApi::class)
     fun reconnectRtsp(url: String) {
         Log.d("PlayerViewModel", "Reconnecting RTSP stream: $url")
-        currentUrl = null // Force reconnection
+        currentUrl = null
         ensurePlaying(url)
     }
 

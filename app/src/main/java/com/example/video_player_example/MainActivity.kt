@@ -50,6 +50,7 @@ fun VideoPlayerApp() {
             } else {
                 RtspPlayerScreen(
                     url = selectedVideo.url,
+                    duration = selectedVideo.duration.toString(),
                     onBackPressed = {
                         selectedVideoId = null
                     }
