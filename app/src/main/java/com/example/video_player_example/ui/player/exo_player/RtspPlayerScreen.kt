@@ -9,14 +9,17 @@ import android.view.View
 import android.widget.Toast
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -41,6 +44,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.max
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -337,13 +341,10 @@ fun RtspPlayerScreen(
             modifier = Modifier.fillMaxSize()
         )
 
-        // Player controls overlay
         if (controlsVisible) {
-            // Back button (top-left)
             if (onBackPressed != null) {
                 IconButton(
                     onClick = {
-                        // Properly stop the video using ViewModel
                         vm.stopPlayback()
                         onBackPressed()
                     },
@@ -360,30 +361,36 @@ fun RtspPlayerScreen(
                     )
                 }
             }
-            
-            // Bottom controls: volume slider + fullscreen button
+
             Row(
                 verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = if (isPortrait) Arrangement.Center
+                        else Arrangement.SpaceBetween,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .background(Color(0x00000000))
-                    .navigationBarsPadding()
                     .padding(horizontal = 12.dp, vertical = 8.dp)
-                    .padding(bottom = if (isPortrait) 0.dp else 0.dp)
-                
+                    .padding(bottom = if (isPortrait) 23.dp else 0.dp)
+                    .padding(start = if (isPortrait) 50.dp else 60.dp)
+                    .widthIn(max = if (isPortrait) 250.dp else 700.dp)
+                    .fillMaxWidth(0.9f)
             ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.VolumeUp,
-                    contentDescription = "Volume",
-                    tint = Color.White,
-                    modifier = Modifier.padding(end = 8.dp)
-                )
-                Slider(
-                    value = volume,
-                    onValueChange = { volume = it },
-                    valueRange = 0f..1f,
-                    modifier = Modifier.width(120.dp)
-                )
+                Row (
+                    verticalAlignment = Alignment.CenterVertically,
+                ){
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.VolumeUp,
+                        contentDescription = "Volume",
+                        tint = Color.White,
+                        modifier = Modifier.padding(end = 8.dp)
+                    )
+                    Slider(
+                        value = volume,
+                        onValueChange = { volume = it },
+                        valueRange = 0f..1f,
+                        modifier = Modifier.width(100.dp)
+                    )
+                }
 
                 Spacer(modifier = Modifier.width(8.dp))
                 IconButton(onClick = {

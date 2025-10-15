@@ -35,6 +35,14 @@ object VideoRepository {
             description = "Open source animated short film",
             duration = "10:34"
         ),
+        VideoItem(
+            id = "4",
+            title = "RTSP Stream (Proxy Server)",
+            url = "http://10.0.2.2:8082/streams/e892bc22-37f8-48f1-874e-c1014026a5b3/index.m3u8",
+            description = "Open source animated short film",
+            duration = "Live",
+            useVlc = false
+        ),
     )
     
     fun getSampleVideos(): List<VideoItem> = videos
