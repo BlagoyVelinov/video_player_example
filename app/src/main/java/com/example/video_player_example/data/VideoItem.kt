@@ -29,14 +29,7 @@ object VideoRepository {
             useVlc = false
         ),
         VideoItem(
-            id = "3", 
-            title = "Big Buck Bunny",
-            url = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-            description = "Open source animated short film",
-            duration = "10:34"
-        ),
-        VideoItem(
-            id = "4",
+            id = "3",
             title = "RTSP emulator (My Server)",
             url = "http://10.0.2.2:8082/streams/d9518a3c-f1aa-41a8-8956-803d84c16e32/index.m3u8",
             description = "Open source animated short film",
@@ -44,7 +37,7 @@ object VideoRepository {
             useVlc = false
         ),
         VideoItem(
-            id = "5",
+            id = "4",
             title = "RTSP real device (My Server)",
             url = "http://192.168.1.14:8082/streams/d9518a3c-f1aa-41a8-8956-803d84c16e32/index.m3u8",
             description = "Open source animated short film",
