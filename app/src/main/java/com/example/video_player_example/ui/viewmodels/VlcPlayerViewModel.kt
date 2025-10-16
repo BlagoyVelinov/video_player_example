@@ -1,4 +1,4 @@
-package com.example.video_player_example.ui.player.vlc_player
+package com.example.video_player_example.ui.viewmodels
 
 import android.app.Application
 import android.net.Uri

@@ -1,4 +1,4 @@
-package com.example.video_player_example.ui.player.exo_player
+package com.example.video_player_example.ui.screens
 
 import android.app.Activity
 import android.content.Context
@@ -57,27 +57,34 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import com.example.video_player_example.ui.utils.FullscreenHelper
+import com.example.video_player_example.ui.utils.PlayerDimensions
+import com.example.video_player_example.ui.viewmodels.ExoPlayerViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+
 @OptIn(UnstableApi::class)
 @Composable
-fun RtspPlayerScreen(
+fun ExoPlayerScreen(
     url: String = "rtsp://dev.gradotech.eu:8554/stream",
     duration: String = "Live",
     onBackPressed: (() -> Unit)? = null
 ) {
     val context: Context = LocalContext.current
-    val vm: PlayerViewModel = viewModel()
+    val vm: ExoPlayerViewModel = viewModel()
     var isLoading by remember { mutableStateOf(true) }
     
+    // Initialize playback
     LaunchedEffect(url) {
         vm.preloadStream(url)
         vm.ensurePlaying(url) 
     }
+    
     val myPlayer: ExoPlayer = vm.player
+
     DisposableEffect(myPlayer) {
         var lastLoggedState = -1
         var connectionAttempts = 0
@@ -85,18 +92,18 @@ fun RtspPlayerScreen(
         
         val listener = object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) {
-                Log.e("RTSP", "Playback error: ${error.errorCodeName} (attempt ${connectionAttempts + 1})", error)
+                Log.e("ExoPlayer", "Playback error: ${error.errorCodeName} (attempt ${connectionAttempts + 1})", error)
                 
                 if (url.startsWith("rtsp://") && connectionAttempts < maxRetries) {
                     connectionAttempts++
-                    Log.w("RTSP", "Retrying RTSP connection (attempt $connectionAttempts/$maxRetries)")
+                    Log.w("ExoPlayer", "Retrying RTSP connection (attempt $connectionAttempts/$maxRetries)")
                     
                     CoroutineScope(Dispatchers.Main).launch {
                         delay(2000)
                         try {
                             vm.reconnectRtsp(url)
                         } catch (e: Exception) {
-                            Log.e("RTSP", "Retry failed", e)
+                            Log.e("ExoPlayer", "Retry failed", e)
                         }
                     }
                 } else {
@@ -110,6 +117,7 @@ fun RtspPlayerScreen(
                     }
                 }
             }
+            
             override fun onPlaybackStateChanged(playbackState: Int) {
                 val state = when (playbackState) {
                     Player.STATE_IDLE -> "IDLE"
@@ -118,30 +126,31 @@ fun RtspPlayerScreen(
                     Player.STATE_ENDED -> "ENDED"
                     else -> playbackState.toString()
                 }
+                
                 if (playbackState != lastLoggedState) {
-                    Log.d("RTSP", "State changed: $state (buffered: ${myPlayer.bufferedPercentage}%)")
+                    Log.d("ExoPlayer", "State changed: $state (buffered: ${myPlayer.bufferedPercentage}%)")
                     lastLoggedState = playbackState
                     
                     if (playbackState == Player.STATE_READY && myPlayer.bufferedPercentage > 0) {
                         connectionAttempts = 0
-                        isLoading = false // Hide loading indicator
-                        Log.d("RTSP", "Connection successful, reset retry counter")
+                        isLoading = false
+                        Log.d("ExoPlayer", "Connection successful, reset retry counter")
                     }
                     
                     if (playbackState == Player.STATE_BUFFERING) {
                         isLoading = true
                     }
                 }
-                
+
                 if (url.startsWith("rtsp://")) {
                     if (playbackState == Player.STATE_ENDED) {
-                        Log.w("RTSP", "Live stream ended unexpectedly, attempting reconnection")
+                        Log.w("ExoPlayer", "Live stream ended unexpectedly, attempting reconnection")
                         CoroutineScope(Dispatchers.Main).launch {
                             delay(1000)
                             try {
                                 vm.reconnectRtsp(url)
                             } catch (e: Exception) {
-                                Log.e("RTSP", "Failed to restart stream", e)
+                                Log.e("ExoPlayer", "Failed to restart stream", e)
                             }
                         }
                     }
@@ -160,8 +169,9 @@ fun RtspPlayerScreen(
                     }
                 }
             }
+            
             override fun onVideoSizeChanged(videoSize: VideoSize) {
-                Log.d("RTSP", "Video size: ${videoSize.width}x${videoSize.height}")
+                Log.d("ExoPlayer", "Video size: ${videoSize.width}x${videoSize.height}")
             }
         }
         
@@ -195,7 +205,7 @@ fun RtspPlayerScreen(
                 }
 
                 if (stagnantMs >= 60000L && consecutiveStagnantChecks >= 10) {
-                    Log.w("RTSP", "Stream appears truly stagnant (${stagnantMs}ms), attempting reconnection")
+                    Log.w("ExoPlayer", "Stream appears truly stagnant (${stagnantMs}ms), attempting reconnection")
                     try {
                         vm.reconnectRtsp(url)
                     } catch (_: Throwable) {}
@@ -212,6 +222,7 @@ fun RtspPlayerScreen(
         }
     }
 
+    // UI State
     var controlsVisible by remember { mutableStateOf(true) }
     var volumeSliderVisible by remember { mutableStateOf(false) }
     var isUserTouchingSlider by remember { mutableStateOf(false) }
@@ -219,27 +230,16 @@ fun RtspPlayerScreen(
     var volume by rememberSaveable { mutableFloatStateOf(1f) }
     var playerView by remember { mutableStateOf<PlayerView?>(null) }
     var isPlaying by remember { mutableStateOf(myPlayer.isPlaying) }
+    
+    // Screen configuration
     val configuration = LocalConfiguration.current
     val isPortrait = configuration.orientation == Configuration.ORIENTATION_PORTRAIT
-
     val screenWidth = configuration.screenWidthDp.dp
     val screenHeight = configuration.screenHeightDp.dp
 
-    val playButtonBottomPadding = if (isPortrait) screenHeight * 0.015f else screenHeight * 0.025f
-    val playButtonStartPadding = if (isPortrait) screenWidth * 0.08f else screenWidth * 0.12f
-    val playButtonEndPadding = if (isPortrait) 0.dp else screenWidth * 0.04f
-    
-    val controlBarBottomPadding = if (isPortrait) screenHeight * 0.002f else 0.dp
-    val controlBarStartPadding = if (isPortrait) screenWidth * 0.12f else screenWidth * 0.08f
-    val controlBarHorizontalPadding = screenWidth * 0.03f
-    val controlBarVerticalPadding = if (isPortrait) screenHeight * 0.01f else screenHeight * 0.025f
-    
-    val volumeSliderWidth = if (isPortrait) screenWidth * 0.28f else screenWidth * 0.15f
-    val controlBarWidthFraction = if (isPortrait) 0.9f else 0.8f
-    val spacerWidth = screenWidth * 0.02f
-    
-    val backButtonTopPadding = if (isPortrait) screenHeight * 0.01f else screenHeight * 0.05f
-    val backButtonStartPadding = if (isPortrait) screenWidth * 0.03f else screenWidth * 0.08f
+    val dimensions = remember(screenWidth, screenHeight, isPortrait) {
+        PlayerDimensions.calculate(screenWidth, screenHeight, isPortrait)
+    }
 
     DisposableEffect(myPlayer) {
         val listener = object : Player.Listener {
@@ -256,7 +256,6 @@ fun RtspPlayerScreen(
     LaunchedEffect(volume) { myPlayer.volume = volume }
 
     LaunchedEffect(isFullscreen, configuration.orientation) {
-
         delay(100)
 
         val activity = context as? Activity ?: return@LaunchedEffect
@@ -315,7 +314,9 @@ fun RtspPlayerScreen(
             modifier = Modifier.fillMaxSize()
         )
 
+        // Player controls
         if (controlsVisible) {
+            // Back button
             if (onBackPressed != null) {
                 IconButton(
                     onClick = {
@@ -329,8 +330,8 @@ fun RtspPlayerScreen(
                         .align(Alignment.TopStart)
                         .statusBarsPadding()
                         .padding(
-                            top = backButtonTopPadding,
-                            start = backButtonStartPadding
+                            top = dimensions.backButtonTopPadding,
+                            start = dimensions.backButtonStartPadding
                         )
                         .background(
                             MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
@@ -357,9 +358,9 @@ fun RtspPlayerScreen(
                     .align(Alignment.BottomStart)
                     .navigationBarsPadding()
                     .padding(
-                        bottom = playButtonBottomPadding,
-                        start = playButtonStartPadding,
-                        end = playButtonEndPadding
+                        bottom = dimensions.playButtonBottomPadding,
+                        start = dimensions.playButtonStartPadding,
+                        end = dimensions.playButtonEndPadding
                     )
                     .background(
                         MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
@@ -385,12 +386,12 @@ fun RtspPlayerScreen(
                         CircleShape
                     )
                     .padding(
-                        horizontal = controlBarHorizontalPadding,
-                        vertical = controlBarVerticalPadding
+                        horizontal = dimensions.controlBarHorizontalPadding,
+                        vertical = dimensions.controlBarVerticalPadding
                     )
-                    .padding(bottom = controlBarBottomPadding)
-                    .padding(start = controlBarStartPadding)
-                    .fillMaxWidth(controlBarWidthFraction)
+                    .padding(bottom = dimensions.controlBarBottomPadding)
+                    .padding(start = dimensions.controlBarStartPadding)
+                    .fillMaxWidth(dimensions.controlBarWidthFraction)
             ) {
                 Row (
                     verticalAlignment = Alignment.CenterVertically,
@@ -420,15 +421,16 @@ fun RtspPlayerScreen(
                                 isUserTouchingSlider = false
                             },
                             valueRange = 0f..1f,
-                            modifier = Modifier.width(volumeSliderWidth)
+                            modifier = Modifier.width(dimensions.volumeSliderWidth)
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.width(spacerWidth))
+                Spacer(modifier = Modifier.width(dimensions.spacerWidth))
+
                 IconButton(onClick = {
                     isFullscreen = !isFullscreen
-                    toggleFullscreenWithRotation(context, isFullscreen, isPortrait)
+                    FullscreenHelper.toggleFullscreenWithRotation(context, isFullscreen, isPortrait)
                 },
                     modifier = Modifier.background(
                         MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
@@ -444,23 +446,4 @@ fun RtspPlayerScreen(
             }
         }
     }
-}
-
-private fun toggleFullscreenWithRotation(context: Context, enable: Boolean, isCurrentlyPortrait: Boolean) {
-    val activity = context as? Activity ?: return
-
-    if (enable) {
-        if (isCurrentlyPortrait) {
-            activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-        }
-    } else {
-        activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-    }
-
-    val window = activity.window
-    WindowCompat.setDecorFitsSystemWindows(window, !enable)
-    val controller = WindowInsetsControllerCompat(window, window.decorView)
-    controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-    if (enable) controller.hide(WindowInsetsCompat.Type.systemBars())
-    else controller.show(WindowInsetsCompat.Type.systemBars())
 }

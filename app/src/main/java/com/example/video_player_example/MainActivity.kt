@@ -11,8 +11,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import com.example.video_player_example.data.VideoRepository
 import com.example.video_player_example.ui.main.MainScreen
-import com.example.video_player_example.ui.player.exo_player.RtspPlayerScreen
-import com.example.video_player_example.ui.player.vlc_player.VlcPlayerScreen
+import com.example.video_player_example.ui.screens.ExoPlayerScreen
+import com.example.video_player_example.ui.screens.VlcPlayerScreen
 import com.example.video_player_example.ui.theme.Video_player_exampleTheme
 
 class MainActivity : ComponentActivity() {
@@ -48,7 +48,7 @@ fun VideoPlayerApp() {
                     }
                 )
             } else {
-                RtspPlayerScreen(
+                ExoPlayerScreen(
                     url = selectedVideo.url,
                     duration = selectedVideo.duration.toString(),
                     onBackPressed = {

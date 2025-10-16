@@ -1,4 +1,4 @@
-package com.example.video_player_example.ui.player.exo_player
+package com.example.video_player_example.ui.viewmodels
 
 import android.app.Application
 import androidx.annotation.OptIn
@@ -12,7 +12,7 @@ import androidx.media3.exoplayer.rtsp.RtspMediaSource
 import android.util.Log
 import androidx.media3.common.Player
 
-class PlayerViewModel(application: Application) : AndroidViewModel(application) {
+class ExoPlayerViewModel(application: Application) : AndroidViewModel(application) {
     private var _player: ExoPlayer? = null
     private var currentUrl: String? = null
     private var isPreloading = false
@@ -53,7 +53,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         player.clearMediaItems()
 
         if (url.startsWith("rtsp://")) {
-            Log.d("PlayerViewModel", "Setting up RTSP stream: $url")
+            Log.d("ExoPlayerViewModel", "Setting up RTSP stream: $url")
 
             val rtspMediaSource = RtspMediaSource.Factory()
                 .setForceUseRtpTcp(true)
@@ -75,7 +75,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 )
 
             player.setMediaSource(rtspMediaSource)
-            Log.d("PlayerViewModel", "RTSP media source configured")
+            Log.d("ExoPlayerViewModel", "RTSP media source configured")
         } else {
 
             val mediaItem = MediaItem.Builder()
@@ -87,19 +87,20 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         player.prepare()
         player.playWhenReady = true
         
-        Log.d("PlayerViewModel", "Player prepared and ready for: $url")
+        Log.d("ExoPlayerViewModel", "Player prepared and ready for: $url")
     }
     
     @OptIn(UnstableApi::class)
     fun preloadStream(url: String) {
         if (isPreloading || currentUrl == url) return
         
-        Log.d("PlayerViewModel", "Preloading stream: $url")
+        Log.d("ExoPlayerViewModel", "Preloading stream: $url")
         isPreloading = true
 
         player
         isPreloading = false
     }
+    
     fun stopPlayback() {
         _player?.let { player ->
             player.pause()
@@ -111,7 +112,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     
     @OptIn(UnstableApi::class)
     fun reconnectRtsp(url: String) {
-        Log.d("PlayerViewModel", "Reconnecting RTSP stream: $url")
+        Log.d("ExoPlayerViewModel", "Reconnecting RTSP stream: $url")
         currentUrl = null
         ensurePlaying(url)
     }

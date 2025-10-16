@@ -1,4 +1,4 @@
-package com.example.video_player_example.ui.player.vlc_player
+package com.example.video_player_example.ui.screens
 
 import android.app.Activity
 import android.content.Context
@@ -30,8 +30,12 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.video_player_example.ui.utils.FullscreenHelper
+import com.example.video_player_example.ui.utils.PlayerDimensions
+import com.example.video_player_example.ui.viewmodels.VlcPlayerViewModel
 import kotlinx.coroutines.delay
 import org.videolan.libvlc.util.VLCVideoLayout
+
 
 @Composable
 fun VlcPlayerScreen(
@@ -40,20 +44,26 @@ fun VlcPlayerScreen(
 ) {
     val context: Context = LocalContext.current
     val vm: VlcPlayerViewModel = viewModel()
+    
+    // UI State
     var isLoading by remember { mutableStateOf(true) }
     var controlsVisible by remember { mutableStateOf(true) }
     var volumeSliderVisible by remember { mutableStateOf(false) }
     var isUserTouchingSlider by remember { mutableStateOf(false) }
     var isFullscreen by rememberSaveable { mutableStateOf(false) }
     var volume by rememberSaveable { mutableFloatStateOf(1f) }
-
     var hasInitialized by rememberSaveable(url) { mutableStateOf(false) }
 
     val configuration = LocalConfiguration.current
     val isPortrait = configuration.orientation == Configuration.ORIENTATION_PORTRAIT
-
     val screenWidth = configuration.screenWidthDp.dp
     val screenHeight = configuration.screenHeightDp.dp
+
+    val dimensions = remember(screenWidth, screenHeight, isPortrait) {
+        PlayerDimensions.calculate(screenWidth, screenHeight, isPortrait)
+    }
+
+    // Initialize playback
     LaunchedEffect(url) {
         if (!hasInitialized) {
             Log.d("VlcPlayerScreen", "First initialization for URL: $url")
@@ -118,21 +128,6 @@ fun VlcPlayerScreen(
             }
         }
     }
-    val playButtonBottomPadding = if (isPortrait) screenHeight * 0.0127f else screenHeight * 0.025f
-    val playButtonStartPadding = if (isPortrait) screenWidth * 0.08f else screenWidth * 0.12f
-    val playButtonEndPadding = if (isPortrait) 0.dp else screenWidth * 0.04f
-    
-    val controlBarBottomPadding = if (isPortrait) screenHeight * 0.002f else 0.dp
-    val controlBarStartPadding = if (isPortrait) screenWidth * 0.12f else screenWidth * 0.08f
-    val controlBarHorizontalPadding = screenWidth * 0.03f
-    val controlBarVerticalPadding = if (isPortrait) screenHeight * 0.01f else screenHeight * 0.025f
-    
-    val volumeSliderWidth = if (isPortrait) screenWidth * 0.28f else screenWidth * 0.15f
-    val controlBarWidthFraction = if (isPortrait) 0.9f else 0.8f
-    val spacerWidth = screenWidth * 0.02f
-    
-    val backButtonTopPadding = if (isPortrait) screenHeight * 0.01f else screenHeight * 0.05f
-    val backButtonStartPadding = if (isPortrait) screenWidth * 0.03f else screenWidth * 0.08f
 
     Box(
         modifier = Modifier.fillMaxSize()
@@ -183,8 +178,8 @@ fun VlcPlayerScreen(
                         .align(Alignment.TopStart)
                         .statusBarsPadding()
                         .padding(
-                            top = backButtonTopPadding,
-                            start = backButtonStartPadding
+                            top = dimensions.backButtonTopPadding,
+                            start = dimensions.backButtonStartPadding
                         )
                         .background(
                             MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
@@ -205,9 +200,9 @@ fun VlcPlayerScreen(
                     .align(Alignment.BottomStart)
                     .navigationBarsPadding()
                     .padding(
-                        bottom = playButtonBottomPadding,
-                        start = playButtonStartPadding,
-                        end = playButtonEndPadding
+                        bottom = dimensions.playButtonBottomPadding,
+                        start = dimensions.playButtonStartPadding,
+                        end = dimensions.playButtonEndPadding
                     )
                     .background(
                         MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
@@ -233,12 +228,12 @@ fun VlcPlayerScreen(
                         CircleShape
                     )
                     .padding(
-                        horizontal = controlBarHorizontalPadding,
-                        vertical = controlBarVerticalPadding
+                        horizontal = dimensions.controlBarHorizontalPadding,
+                        vertical = dimensions.controlBarVerticalPadding
                     )
-                    .padding(bottom = controlBarBottomPadding)
-                    .padding(start = controlBarStartPadding)
-                    .fillMaxWidth(controlBarWidthFraction)
+                    .padding(bottom = dimensions.controlBarBottomPadding)
+                    .padding(start = dimensions.controlBarStartPadding)
+                    .fillMaxWidth(dimensions.controlBarWidthFraction)
             ) {
                 Row (
                     verticalAlignment = Alignment.CenterVertically,
@@ -268,15 +263,17 @@ fun VlcPlayerScreen(
                                 isUserTouchingSlider = false
                             },
                             valueRange = 0f..1f,
-                            modifier = Modifier.width(volumeSliderWidth)
+                            modifier = Modifier.width(dimensions.volumeSliderWidth)
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.width(spacerWidth))
+                Spacer(modifier = Modifier.width(dimensions.spacerWidth))
+                
+                // Fullscreen button
                 IconButton(onClick = {
                     isFullscreen = !isFullscreen
-                    toggleFullscreenWithRotation(context, isFullscreen, isPortrait)
+                    FullscreenHelper.toggleFullscreenWithRotation(context, isFullscreen, isPortrait)
                 },
                     modifier = Modifier.background(
                         MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
@@ -298,28 +295,4 @@ fun VlcPlayerScreen(
             vm.stopPlayback()
         }
     }
-}
-
-private fun toggleFullscreenWithRotation(
-    context: Context,
-    enable: Boolean,
-    isCurrentlyPortrait: Boolean
-) {
-    val activity = context as? Activity ?: return
-
-    if (enable) {
-        if (isCurrentlyPortrait) {
-            activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-        }
-    } else {
-        activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-    }
-
-    val window = activity.window
-    WindowCompat.setDecorFitsSystemWindows(window, !enable)
-    val controller = WindowInsetsControllerCompat(window, window.decorView)
-    controller.systemBarsBehavior =
-        WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-    if (enable) controller.hide(WindowInsetsCompat.Type.systemBars())
-    else controller.show(WindowInsetsCompat.Type.systemBars())
 }
