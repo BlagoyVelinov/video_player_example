@@ -237,6 +237,9 @@ fun RtspPlayerScreen(
     val volumeSliderWidth = if (isPortrait) screenWidth * 0.28f else screenWidth * 0.15f
     val controlBarWidthFraction = if (isPortrait) 0.9f else 0.8f
     val spacerWidth = screenWidth * 0.02f
+    
+    val backButtonTopPadding = if (isPortrait) screenHeight * 0.01f else screenHeight * 0.05f
+    val backButtonStartPadding = if (isPortrait) screenWidth * 0.03f else screenWidth * 0.08f
 
     DisposableEffect(myPlayer) {
         val listener = object : Player.Listener {
@@ -316,7 +319,6 @@ fun RtspPlayerScreen(
             if (onBackPressed != null) {
                 IconButton(
                     onClick = {
-                        // Rotate to portrait before going back
                         val activity = context as? Activity
                         activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
                         
@@ -326,7 +328,10 @@ fun RtspPlayerScreen(
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .statusBarsPadding()
-                        .padding(16.dp)
+                        .padding(
+                            top = backButtonTopPadding,
+                            start = backButtonStartPadding
+                        )
                         .background(
                             MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
                             CircleShape
@@ -339,7 +344,7 @@ fun RtspPlayerScreen(
                     )
                 }
             }
-            // Play/Pause button at bottom left
+
             IconButton(
                 onClick = {
                     if (isPlaying) {

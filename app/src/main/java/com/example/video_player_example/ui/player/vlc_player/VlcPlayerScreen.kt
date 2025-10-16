@@ -51,6 +51,8 @@ fun VlcPlayerScreen(
     val configuration = LocalConfiguration.current
     val isPortrait = configuration.orientation == Configuration.ORIENTATION_PORTRAIT
 
+    val screenWidth = configuration.screenWidthDp.dp
+    val screenHeight = configuration.screenHeightDp.dp
     LaunchedEffect(url) {
         if (!hasInitialized) {
             Log.d("VlcPlayerScreen", "First initialization for URL: $url")
@@ -100,6 +102,8 @@ fun VlcPlayerScreen(
         if (isFullscreen) controller.hide(WindowInsetsCompat.Type.systemBars())
         else controller.show(WindowInsetsCompat.Type.systemBars())
     }
+    val backButtonTopPadding = if (isPortrait) screenHeight * 0.01f else screenHeight * 0.05f
+    val backButtonStartPadding = if (isPortrait) screenWidth * 0.03f else screenWidth * 0.08f
 
     Box(
         modifier = Modifier.fillMaxSize()
@@ -149,7 +153,10 @@ fun VlcPlayerScreen(
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .statusBarsPadding()
-                        .padding(16.dp)
+                        .padding(
+                            top = backButtonTopPadding,
+                            start = backButtonStartPadding
+                        )
                         .background(
                             MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
                             CircleShape

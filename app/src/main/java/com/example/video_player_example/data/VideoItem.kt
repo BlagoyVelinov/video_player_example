@@ -22,7 +22,7 @@ object VideoRepository {
         ),
         VideoItem(
             id = "2",
-            title = "RTSP Stream (RTSP Player)",
+            title = "RTSP Stream (Exo Player)",
             url = "rtsp://dev.gradotech.eu:8554/stream",
             description = "Same RTSP stream using RTSP player",
             duration = "Live",
@@ -37,8 +37,16 @@ object VideoRepository {
         ),
         VideoItem(
             id = "4",
-            title = "RTSP Stream (Proxy Server)",
-            url = "http://10.0.2.2:8083/streams/4d14f4f3-7dc6-40c3-9486-7df3e49e3db9/index.m3u8",
+            title = "RTSP emulator (Proxy Server)",
+            url = "http://10.0.2.2:8082/streams/8b2076d5-e9ce-46a3-a83a-23f62516b99f/index.m3u8",
+            description = "Open source animated short film",
+            duration = "Live",
+            useVlc = false
+        ),
+        VideoItem(
+            id = "5",
+            title = "RTSP real device (Proxy Server)",
+            url = "http://192.168.1.14:8082/streams/d9518a3c-f1aa-41a8-8956-803d84c16e32/index.m3u8",
             description = "Open source animated short film",
             duration = "Live",
             useVlc = false
