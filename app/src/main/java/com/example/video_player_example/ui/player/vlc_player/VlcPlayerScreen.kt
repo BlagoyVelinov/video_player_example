@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.util.Log
+import android.view.WindowManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -85,7 +86,7 @@ fun VlcPlayerScreen(
 
     LaunchedEffect(volumeSliderVisible, isUserTouchingSlider) {
         if (volumeSliderVisible && !isUserTouchingSlider) {
-            delay(2000)
+            delay(3000)
             volumeSliderVisible = false
         }
     }
@@ -102,6 +103,34 @@ fun VlcPlayerScreen(
         if (isFullscreen) controller.hide(WindowInsetsCompat.Type.systemBars())
         else controller.show(WindowInsetsCompat.Type.systemBars())
     }
+
+    DisposableEffect(vm.isPlaying.value) {
+        val activity = context as? Activity
+        if (vm.isPlaying.value && activity != null) {
+            Log.d("VlcPlayerScreen", "Keeping screen awake")
+            activity.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+        
+        onDispose {
+            if (activity != null) {
+                Log.d("VlcPlayerScreen", "Allowing screen to sleep")
+                activity.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            }
+        }
+    }
+    val playButtonBottomPadding = if (isPortrait) screenHeight * 0.0127f else screenHeight * 0.025f
+    val playButtonStartPadding = if (isPortrait) screenWidth * 0.08f else screenWidth * 0.12f
+    val playButtonEndPadding = if (isPortrait) 0.dp else screenWidth * 0.04f
+    
+    val controlBarBottomPadding = if (isPortrait) screenHeight * 0.002f else 0.dp
+    val controlBarStartPadding = if (isPortrait) screenWidth * 0.12f else screenWidth * 0.08f
+    val controlBarHorizontalPadding = screenWidth * 0.03f
+    val controlBarVerticalPadding = if (isPortrait) screenHeight * 0.01f else screenHeight * 0.025f
+    
+    val volumeSliderWidth = if (isPortrait) screenWidth * 0.28f else screenWidth * 0.15f
+    val controlBarWidthFraction = if (isPortrait) 0.9f else 0.8f
+    val spacerWidth = screenWidth * 0.02f
+    
     val backButtonTopPadding = if (isPortrait) screenHeight * 0.01f else screenHeight * 0.05f
     val backButtonStartPadding = if (isPortrait) screenWidth * 0.03f else screenWidth * 0.08f
 
@@ -173,74 +202,87 @@ fun VlcPlayerScreen(
             IconButton(
                 onClick = { vm.togglePlayPause() },
                 modifier = Modifier
-                    .align(Alignment.Center)
+                    .align(Alignment.BottomStart)
+                    .navigationBarsPadding()
+                    .padding(
+                        bottom = playButtonBottomPadding,
+                        start = playButtonStartPadding,
+                        end = playButtonEndPadding
+                    )
                     .background(
                         MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
                         CircleShape
                     )
-                    .size(64.dp)
             ) {
                 Icon(
                     imageVector = if (vm.isPlaying.value) Icons.Default.Pause else Icons.Default.PlayArrow,
                     contentDescription = if (vm.isPlaying.value) "Pause" else "Play",
-                    tint = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.size(32.dp)
+                    tint = MaterialTheme.colorScheme.onSurface
                 )
             }
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = if (isPortrait) Arrangement.SpaceAround
-                else Arrangement.SpaceBetween,
+                        else Arrangement.SpaceBetween,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .background(Color(0x00000000))
-                    .padding(horizontal = 12.dp, vertical = 8.dp)
-                    .padding(bottom = if (isPortrait) 23.dp else 0.dp)
-                    .padding(start = if (isPortrait) 50.dp else 60.dp)
-                    .widthIn(max = if (isPortrait) 250.dp else 700.dp)
-                    .fillMaxWidth(0.9f)
+                    .navigationBarsPadding()
+                    .background(
+                        Color(0x66000000).copy(alpha = 0.4f),
+                        CircleShape
+                    )
+                    .padding(
+                        horizontal = controlBarHorizontalPadding,
+                        vertical = controlBarVerticalPadding
+                    )
+                    .padding(bottom = controlBarBottomPadding)
+                    .padding(start = controlBarStartPadding)
+                    .fillMaxWidth(controlBarWidthFraction)
             ) {
-                IconButton(
-                    onClick = { volumeSliderVisible = !volumeSliderVisible },
+                Row (
+                    verticalAlignment = Alignment.CenterVertically,
+                ){
+                    IconButton(
+                        onClick = { volumeSliderVisible = !volumeSliderVisible },
+                        modifier = Modifier.background(
+                            MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
+                            CircleShape
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.VolumeUp,
+                            contentDescription = "Volume",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+
+                    if (volumeSliderVisible) {
+                        Slider(
+                            value = volume,
+                            onValueChange = {
+                                volume = it
+                                isUserTouchingSlider = true
+                            },
+                            onValueChangeFinished = {
+                                isUserTouchingSlider = false
+                            },
+                            valueRange = 0f..1f,
+                            modifier = Modifier.width(volumeSliderWidth)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(spacerWidth))
+                IconButton(onClick = {
+                    isFullscreen = !isFullscreen
+                    toggleFullscreenWithRotation(context, isFullscreen, isPortrait)
+                },
                     modifier = Modifier.background(
                         MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
                         CircleShape
                     )
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.VolumeUp,
-                        contentDescription = "Volume",
-                        tint = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-
-                if (volumeSliderVisible) {
-                    Slider(
-                        value = volume,
-                        onValueChange = {
-                            volume = it
-                            isUserTouchingSlider = true
-                        },
-                        onValueChangeFinished = {
-                            isUserTouchingSlider = false
-                        },
-                        valueRange = 0f..1f,
-                        modifier = Modifier.width(120.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(8.dp))
-                IconButton(
-                    onClick = {
-                        isFullscreen = !isFullscreen
-                        toggleFullscreenWithRotation(context, isFullscreen, isPortrait)
-                    },
-                    modifier = Modifier.background(
-                        MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
-                        CircleShape
-                    )
-                ) {
+                    ) {
                     Icon(
                         imageVector = if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
                         contentDescription = if (isFullscreen) "Exit Fullscreen" else "Enter Fullscreen",
