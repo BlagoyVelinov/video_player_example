@@ -163,19 +163,24 @@ The application allows you to test the same stream with both players:
 ```
 app/src/main/java/com/example/video_player_example/
 ├── data/
-│   └── VideoItem.kt              # Video data models and repository
+│   └── VideoItem.kt                  # Video data models and repository
 ├── ui/
 │   ├── main/
-│   │   └── MainScreen.kt         # Video list screen
-│   ├── player/
-│   │   ├── exo_player/
-│   │   │   ├── PlayerViewModel.kt    # ExoPlayer logic
-│   │   │   └── RtspPlayerScreen.kt   # ExoPlayer UI
-│   │   └── vlc_player/
-│   │       ├── VlcPlayerViewModel.kt # VLC player logic
-│   │       └── VlcPlayerScreen.kt    # VLC player UI
-│   └── theme/                    # Material Design theme
-└── MainActivity.kt               # App entry point and navigation
+│   │   └── MainScreen.kt             # Video list screen
+│   ├── screens/
+│   │   ├── ExoPlayerScreen.kt        # ExoPlayer UI screen
+│   │   └── VlcPlayerScreen.kt        # VLC player UI screen
+│   ├── viewmodels/
+│   │   ├── ExoPlayerViewModel.kt     # ExoPlayer logic and state
+│   │   └── VlcPlayerViewModel.kt     # VLC player logic and state
+│   ├── utils/
+│   │   ├── FullscreenHelper.kt       # Fullscreen mode utilities
+│   │   └── PlayerDimensions.kt       # Player sizing utilities
+│   └── theme/
+│       ├── Color.kt                  # Material Design colors
+│       ├── Theme.kt                  # App theme configuration
+│       └── Type.kt                   # Typography definitions
+└── MainActivity.kt                   # App entry point and navigation
 ```
 
 ## Configuration

@@ -2670,3 +2670,26 @@ ui/player/vlc_player/VlcPlayerViewModel.kt
 ui/player/exo_player/RtspPlayerScreen.kt
 ui/player/exo_player/PlayerViewModel.kt
 All functionality has been moved to the new, better-organized structure! 🎉
+
+
+# Me: Can you fix the ## Project Structure in README file with the new one
+
+I'll read the README file to see the current Project Structure section and update it to reflect the actual current project structure.
+
+Now let me check the actual current project structure to update the README accurately:
+
+Perfect! Now I can see the actual project structure. Let me update the README with the correct structure:
+
+README.md
++16
+-11
+Perfect! I've updated the Project Structure section in the README file to reflect the actual current project organization.
+
+Changes Made:
+The structure now accurately shows:
+
+screens/ directory containing ExoPlayerScreen.kt and VlcPlayerScreen.kt
+viewmodels/ directory with ExoPlayerViewModel.kt and VlcPlayerViewModel.kt
+utils/ directory with FullscreenHelper.kt and PlayerDimensions.kt
+theme/ directory with all three theme files (Color.kt, Theme.kt, Type.kt)
+The old structure referenced non-existent directories like player/exo_player/ and player/vlc_player/, which have been replaced with the correct current structure.
